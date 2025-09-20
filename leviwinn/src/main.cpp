@@ -88,33 +88,6 @@ int main() {
       RightWhls.spin(forward, joyR, pct);
     }
 
-    if(is180){
-      Brain.Screen.clearLine();
-      Brain.Screen.newLine();
-      Brain.Screen.print("180");
-    }else{
-      Brain.Screen.clearLine();
-      Brain.Screen.newLine();
-      Brain.Screen.print("90");
-    }
-    if(convoff){
-      Brain.Screen.clearLine();
-      Brain.Screen.newLine();
-      Brain.Screen.print("conveyor off");
-    }else{
-      Brain.Screen.clearLine();
-      Brain.Screen.newLine();
-      Brain.Screen.print("conveyor on");
-    }
-    Brain.Screen.clearLine();
-    Brain.Screen.newLine();
-    Brain.Screen.print("%d", joyR);
-    Brain.Screen.clearLine();
-    Brain.Screen.newLine();
-    Brain.Screen.print("%d", joyL);
-    Brain.Screen.clearLine();
-    Brain.Screen.newLine();
-    Brain.Screen.print("%d", i);
   }
   
 }
