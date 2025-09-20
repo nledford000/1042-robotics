@@ -1,7 +1,7 @@
 /*----------------------------------------------------------------------------*/
 /*                                                                            */
 /*    Module:       main.cpp                                                  */
-/*    Author:       C:\Users\leviw                                            */
+/*    Author:       C:\Users\snobl                                            */
 /*    Created:      Sat Sep 20 2025                                           */
 /*    Description:  V5 project                                                */
 /*                                                                            */
@@ -15,8 +15,7 @@
 using namespace vex;
 
 int main() {
-
-  Brain.Screen.clearScreen();
-  Brain.Screen.print("Hello");
+  // Initializing Robot Configuration. DO NOT REMOVE!
+  vexcodeInit();
   
 }
