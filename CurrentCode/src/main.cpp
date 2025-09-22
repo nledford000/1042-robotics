@@ -29,6 +29,10 @@ bool yToggle= 0;
 int servoYPos = 0;
 int servoBPos= 0;
 int servoSlowPos = 0;
+int bclose = 0;
+int bopen = 100;
+int yclose = 0;
+int yopen = 100;
 
 int main() {
   while (true) {
@@ -54,7 +58,7 @@ int main() {
       bToggle = 1 - bToggle;
       while (Controller1.ButtonB.pressing()) { wait(10, msec); }
     }
-    servoBPos = (bToggle == 1) ? 100 : 0;
+    servoBPos = (bToggle == 1) ? bopen : bclose;
     ServoB.setPosition(servoBPos, degrees);
 
     // --- Button Y Toggle Servo ---
@@ -62,7 +66,7 @@ int main() {
       yToggle = 1 - yToggle;
       while (Controller1.ButtonY.pressing()) { wait(10, msec); }
     }
-    servoYPos = (yToggle == 1) ? 100 : 0;
+    servoYPos = (yToggle == 1) ? yopen : yclose;
     ServoY.setPosition(servoYPos, degrees);
 
     // --- R1 & R2 Continuous Servo ---
@@ -73,8 +77,8 @@ int main() {
       servoSlowPos -= 2; 
     }
 
-    if (servoSlowPos > 180) servoSlowPos = 180;
-    if (servoSlowPos < 0) servoSlowPos = 0;
+    //if (servoSlowPos > 180) servoSlowPos = 180;
+    //if (servoSlowPos < 0) servoSlowPos = 0;
 
     ServoSlow.setPosition(servoSlowPos, degrees);
   }
