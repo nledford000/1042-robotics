@@ -24,22 +24,27 @@ int xy;
 bool xsel = true;
 bool ysel = false;
 bool can42 = true;
+bool flag = true;
 
-void incX() {
-  x++;
+void update() {
   Brain.Screen.clearScreen();
   Brain.Screen.setCursor(5,5);
   Brain.Screen.print("X = %d", x);
+  Brain.Screen.setCursor(5, 10);
+  Brain.Screen.print("Y = %d", y);
+  xy = x + y;
   Brain.Screen.setCursor(6,5);
   Brain.Screen.print("Answer: %d", xy);
+  flag = false;
+}
+
+void incX() {
+  x++;
+  flag = true;
 }
 void incY() {
   y++;
-  Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(5, 10);
-  Brain.Screen.print("Y = %d", y);
-  Brain.Screen.setCursor(6,5);
-  Brain.Screen.print("Answer: %d", xy);
+  flag = true;
 }
 void drsX() {
   if(x >= 0) {
@@ -47,11 +52,7 @@ void drsX() {
   }else{
     x = 0;
   }
-  Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(5,5);
-  Brain.Screen.print("X = %d", x);
-  Brain.Screen.setCursor(6,5);
-  Brain.Screen.print("Answer: %d", xy);
+  flag = true;
 }
 void drsY() {
   if(y >= 0){
@@ -59,11 +60,7 @@ void drsY() {
   }else{
     y = 0;
   }
-  Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(5, 10);
-  Brain.Screen.print("Y = %d", y);
-  Brain.Screen.setCursor(6,5);
-  Brain.Screen.print("Answer: %d", xy);
+  flag = true;
 }
 void selR() {
   if(xsel) {
@@ -92,9 +89,13 @@ int main() {
   Controller1.ButtonRight.pressed(selR);
   Controller1.ButtonLeft.pressed(selL);
   Controller1.ButtonA.pressed(reset);
+  Controller1.ButtonUp.pressed(incX);
+  Controller1.ButtonDown.pressed(drsX);
   
   while(true) {
-    xy = x + y;
+    if(flag) {
+      update();
+    }
     if(x + y == 42 && can42) {
       Brain.Screen.clearScreen();
       Brain.Screen.print("The answer to everything is 42");
