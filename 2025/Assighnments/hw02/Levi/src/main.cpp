@@ -28,12 +28,12 @@ bool flag = true;
 
 void update() {
   Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(5,5);
+  Brain.Screen.setCursor(50, 35);
   Brain.Screen.print("X = %d", x);
-  Brain.Screen.setCursor(5, 10);
+  Brain.Screen.setCursor(50, 65);
   Brain.Screen.print("Y = %d", y);
   xy = x + y;
-  Brain.Screen.setCursor(6,5);
+  Brain.Screen.setCursor(60, 50);
   Brain.Screen.print("Answer: %d", xy);
   flag = false;
 }
