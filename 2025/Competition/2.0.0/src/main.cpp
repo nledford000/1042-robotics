@@ -91,7 +91,7 @@ int main() {
   actions[1] = {false, startNeuralAction, &Controller1.ButtonB};
   actions[2] = {false, toggleMagAction, &Controller1.ButtonY};
   actions[3] = {false, togglePanelAction, &Controller1.ButtonA};
-s
+
   while (true) {
     int leftSpeed = Controller1.Axis3.position();
     int rightSpeed = Controller1.Axis2.position();
