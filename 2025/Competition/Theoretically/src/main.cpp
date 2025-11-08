@@ -171,7 +171,6 @@ void updateDrive() {
   RightMotor.spin(forward, rightCmd, pct);
 }
 
-// ---------------- NEW SET POSITION FUNCTIONS ----------------
 void setArmPosition() {
   armTargets[armState] = ArmPot.value(deg);
   armTarget = armTargets[armState];
@@ -181,7 +180,6 @@ void setNeuralPosition() {
   neuralTargets[neuralState] = NeuralPot.value(deg);
   neuralTarget = neuralTargets[neuralState];
 }
-// ------------------------------------------------------------
 
 int main() {
   vexcodeInit();
