@@ -1,144 +1,250 @@
 #include "vex.h"
+
+// ---- START VEXCODE CONFIGURED DEVICES ----
+// Robot Configuration:
+// [Name]               [Type]        [Port(s)]
+// LeftMotor            motor         1               
+// RightMotor           motor         2               
+// ArmMotor             motor         3               
+// ServoOC              servo         A               
+// ServoInc             servo         C               
+// ArmPot               pot           E               
+// NeuralPot            pot           G               
+// NeuralMotor          motor         4               
+// Controller1          controller                    
+// ---- END VEXCODE CONFIGURED DEVICES ----
+
+#include <cmath>
 using namespace vex;
 
-// ---------------------------------------------------------
-// GLOBALS
-// ---------------------------------------------------------
-vex::brain Brain;
-vex::controller Controller1;
-vex::motor ArmMotor = vex::motor(vex::PORT1);
-vex::motor NeuralMotor = vex::motor(vex::PORT2);
+const int driveDeadband = 15;
 
-// Potentiometer in RAW 12-bit mode (0–4095)
-vex::pot ArmPot = vex::pot(Brain.ThreeWirePort.A);
+const double armLow = 180;
+const double armMid = 200;
+const double armHigh = 230;//180, 200, 228
+const double armUpSpeed = 100;
+const double armDownSpeed = 100;
+const double armTolerance = 4;
 
-bool magOn = false;
+const int magOpen = 100;
+const int magClosed = 0;
+
+const double neuralPos1 = 194;//194, 221, 250,  
+const double neuralPos2 = 221;
+const double neuralPos3 = 250;
+
+const double neuralUpSpeed = 60;
+const double neuralDownSpeed = 60;
+const double neuralTolerance = 2;
+
+const double gravK = 15.0;
+const double angleOffset = 204.0; // set this to your arm's horizontal potentiometer reading
+//MotorPower=BaseSpeed+-(gravK x |cos(angle)|)
+
+int armState = 1;
+double armTarget = armLow;
 bool armAutoMove = false;
+bool magToggle = false;
+int neuralState = 1;
+double neuralTarget = neuralPos1;
 bool neuralAutoMove = false;
 
-// Target raw positions for the arm (0–4095)
-int armTargets[] = {8, 17, 25};
-int currentArm = 0;
+double servoIncValue = 15;
+double servoIncPos = -25; 
+double servoInit = -25;
+double servoMax = 70;
+//double servoIncPos = -60; 
 
-// Target raw positions for neural
-int neuralTargets[] = {100, 500, 900};
-int currentNeural = 0;
+bool autonomousMode = false;
 
 
-// ---------------------------------------------------------
-// ACTION SYSTEM (USING REAL FUNCTIONS — NO LAMBDAS)
-// ---------------------------------------------------------
-struct Action {
-  bool last;
-  void (*onPress)();
-  bool (*isDown)();
-  void update() {
-    bool now = isDown();
-    if (now && !last) onPress();
-    last = now;
-  }
-};
-
-// ---------------------------------------------------------
-// BUTTON-PRESS CHECK FUNCTIONS (RAW FUNCTION POINTER SAFE)
-// ---------------------------------------------------------
-bool isY() { return Controller1.ButtonY.pressing(); }
-bool isX() { return Controller1.ButtonX.pressing(); }
-bool isA() { return Controller1.ButtonA.pressing(); }
-bool isB() { return Controller1.ButtonB.pressing(); }
-
-// ---------------------------------------------------------
-// ACTION CALLBACK FUNCTIONS
-// ---------------------------------------------------------
-
-void toggleMag() {
-  magOn = !magOn;
+void toggleMagAction() {
+  magToggle = !magToggle;
+  ServoOC.setPosition(magToggle ? magOpen : magClosed, degrees);
 }
 
-void cycleArm() {
-  currentArm = (currentArm + 1) % 3;
+void cycleArmPosition() {
+  armState++;
+  if (armState > 3) armState = 1;
+  if (armState == 1) armTarget = armLow;
+  else if (armState == 2) armTarget = armMid;
+  else if (armState == 3) armTarget = armHigh;
   armAutoMove = true;
-  Brain.Screen.printAt(10, 40, "Arm Target: %d   ", armTargets[currentArm]);
 }
 
-void cycleNeural() {
-  currentNeural = (currentNeural + 1) % 3;
+void cycleNeuralPosition() {
+  neuralState++;
+  if (neuralState > 4) neuralState = 1;
+  if (neuralState == 1) neuralTarget = neuralPos1;
+  else if (neuralState == 2) neuralTarget = neuralPos2;
+  else if (neuralState == 3) neuralTarget = neuralPos3;
   neuralAutoMove = true;
-  Brain.Screen.printAt(10, 60, "Neural Target: %d   ", neuralTargets[currentNeural]);
 }
 
-void incrementServo() {
-  // Temporary debug action
-  Brain.Screen.printAt(10, 80, "Servo Increment Pressed");
+double clampPct(double v) {
+  if (v > 100.0) return 100.0;
+  if (v < -100.0) return -100.0;
+  return v;
 }
 
+double getGravityAssistPct() {
+  const double PI = 3.1415926535896;
+  double angleDeg = ArmPot.value(deg);
+  double angleRad = (angleDeg - angleOffset) * PI / 180.0;
+  return gravK * fabs(cos(angleRad));
+}
 
-// ---------------------------------------------------------
-// ACTIONS ARRAY
-// ---------------------------------------------------------
-Action actions[] = {
-  {false, toggleMag,   isY},
-  {false, cycleNeural, isX},
-  {false, cycleArm,    isB},
-  {false, incrementServo, isA}
+void armUpManual() {
+  double grav = getGravityAssistPct();
+  double out = clampPct(armUpSpeed + grav);
+  ArmMotor.spin(forward, out, pct);
+  armAutoMove = false;
+}
+
+void armDownManual() {
+  double grav = getGravityAssistPct();
+  double out = clampPct(armDownSpeed - grav);
+  if (out < 10) out = 10;
+  ArmMotor.spin(reverse, out, pct);
+  armAutoMove = false;
+}
+void cycleServoInc() {
+    servoIncPos += servoIncValue;
+    if (servoIncPos > servoMax) {
+        servoIncPos = servoInit;
+    }
+    ServoInc.setPosition(servoIncPos, degrees);
+}
+
+bool buttonYPressed() { return Controller1.ButtonY.pressing(); }
+bool buttonXPressed() { return Controller1.ButtonX.pressing(); }
+bool buttonBPressed() { return Controller1.ButtonB.pressing(); }
+bool buttonR1Pressed() { return Controller1.ButtonR1.pressing(); }
+bool buttonR2Pressed() { return Controller1.ButtonR2.pressing(); }
+bool buttonAPressed() { return Controller1.ButtonA.pressing(); }
+bool buttonUpPressed() { return Controller1.ButtonUp.pressing(); }
+
+
+struct Action {
+  bool lastState;
+  void (*onPress)();
+  bool (*isPressed)();
+  void update() {
+    bool now = isPressed();
+    if (now && !lastState && onPress)
+      onPress();
+    lastState = now;
+  }
 };
 
-
-// ---------------------------------------------------------
-// ARM + NEURAL AUTO CONTROL
-// ---------------------------------------------------------
-
-void updateArm() {
-  int pos = ArmPot.value(vex::analogUnits::range12bit);  // 0–4095
-  int target = armTargets[currentArm];
-
-  if (armAutoMove) {
-    int error = target - pos;
-
-    if (abs(error) < 3) {   // within tolerance
-      armAutoMove = false;
-      ArmMotor.stop();
-      return;
-    }
-
-    // Simple proportional move
-    ArmMotor.spin(vex::directionType::fwd, error * 2, vex::velocityUnits::pct);
-  }
-}
-
-void updateNeural() {
-  int pos = ArmPot.value(vex::analogUnits::range12bit); // example if using same pot
-  int target = neuralTargets[currentNeural];
-
-  if (neuralAutoMove) {
-    int error = target - pos;
-
-    if (abs(error) < 5) {
-      neuralAutoMove = false;
-      NeuralMotor.stop();
-      return;
-    }
-
-    NeuralMotor.spin(vex::directionType::fwd, error * 2, vex::velocityUnits::pct);
-  }
-}
-
-
-// ---------------------------------------------------------
-// MAIN LOOP
-// ---------------------------------------------------------
-int main() {
-
+int armAutoThread() {
   while (true) {
+    if (armAutoMove) {
+      double current = ArmPot.value(deg);
+      double error = armTarget - current;
+      if (fabs(error) > armTolerance) {
+        bool needUp = (error > 0);
+        double grav = getGravityAssistPct();
+        double base = needUp ? armUpSpeed : armDownSpeed;
+        double out = needUp ? clampPct(base + grav) : clampPct(base - grav);
+        if (!needUp && out < 10) out = 10;
+        if (needUp) ArmMotor.spin(forward, out, pct);
+        else ArmMotor.spin(reverse, out, pct);
+      } else {
+        ArmMotor.stop(hold);
+        armAutoMove = false;
+      }
+    } else if (!Controller1.ButtonR1.pressing() && !Controller1.ButtonR2.pressing()) {
+      ArmMotor.stop(hold);
+    }
+    this_thread::sleep_for(20);
+  }
+  return 0;
+}
 
-    // Update button actions
-    for (auto &a : actions)
-      a.update();
+int neuralAutoThread() {
+  while (true) {
+    if (neuralAutoMove) {
+      double current = NeuralPot.value(deg);
+      double error = neuralTarget - current;
+      if (fabs(error) > neuralTolerance) {
+        NeuralMotor.spin(error > 0 ? reverse : forward,
+                         (error > 0 ? neuralDownSpeed : neuralUpSpeed), pct);
+      } else {
+        NeuralMotor.stop(hold);
+        neuralAutoMove = false;
+      }
+    } else {
+      NeuralMotor.stop(hold);
+    }
+    this_thread::sleep_for(20);
+  }
+  return 0;
+}
 
-    // Autonomous movements
-    updateArm();
-    updateNeural();
+void macroSequence() {
+    autonomousMode = true;
 
-    vex::task::sleep(20);
+    magToggle = true;
+    ServoOC.setPosition(magOpen, degrees);
+    wait(500, msec);
+
+    armTarget = armHigh;
+    armAutoMove = true;
+    int timeout = 3000;
+    while (armAutoMove && timeout > 0) {
+        this_thread::sleep_for(1);
+        timeout -= 20;
+    }
+
+    magToggle = true;
+    ServoOC.setPosition(magClosed, degrees);
+    wait(500, msec);
+
+    armTarget = armLow;
+    armAutoMove = true;
+    timeout = 3000;
+    while (armAutoMove && timeout > 0) {
+        this_thread::sleep_for(1);
+        timeout -= 20;
+    }
+
+    // Step 5: Servo increment
+    servoIncPos -= servoIncValue;
+    if (servoIncPos < 0) servoIncPos = 180;
+    ServoInc.setPosition(servoIncPos, degrees);
+    wait(500, msec);
+
+    autonomousMode = false;
+}
+
+
+int main() {
+  vexcodeInit();
+  thread armThread(armAutoThread);
+  thread neuralThread(neuralAutoThread);
+
+  Action actions[] = {
+    {false, toggleMagAction, buttonYPressed},
+    {false, cycleNeuralPosition, buttonXPressed},
+    {false, cycleArmPosition, buttonBPressed},
+    {false, armDownManual, buttonR2Pressed},
+    {false, armUpManual, buttonR1Pressed},
+    {false, cycleServoInc, buttonAPressed},
+    {false, macroSequence, buttonUpPressed}
+  };
+  ServoInc.setPosition(servoInit, degrees);
+  while (true) {
+    int leftSpeed = Controller1.Axis3.position();
+    int rightSpeed = Controller1.Axis2.position();
+    if (abs(leftSpeed) < driveDeadband) leftSpeed = 0;
+    if (abs(rightSpeed) < driveDeadband) rightSpeed = 0;
+    LeftMotor.spin(forward, leftSpeed, pct);
+    RightMotor.spin(forward, rightSpeed, pct);
+
+    for (int i = 0; i < sizeof(actions)/sizeof(actions[0]); i++)
+      actions[i].update();
+
+    this_thread::sleep_for(20);
   }
 }
