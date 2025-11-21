@@ -4,23 +4,24 @@
 // Robot Configuration:
 // [Name]               [Type]        [Port(s)]
 // Controller1          controller                    
+// ArmMotor             motor         3               
+// NeuralMotor          motor         4               
 // LeftMotor            motor         1               
 // RightMotor           motor         2               
-// ArmMotor             motor         3               
 // ServoOC              servo         A               
-// ServoInc             servo         C               
-// NeuralPot            pot           G               
-// NeuralMotor          motor         4               
 // ArmPot               pot           E               
+// NeuralPot            pot           G               
+// ServoInc             servo         C               
 // servoStick           servo         F               
 // ---- END VEXCODE CONFIGURED DEVICES ----
 #include <cmath>
 using namespace vex;
-
+// NTS
+// fix arm hight 
 // ---------------- Constants ----------------
 const int driveDeadband = 15;
 
-const double armLow = 180;
+const double armLow = 185;
 const double armHigh = 230;
 const double armUpSpeed = 100;
 const double armDownSpeed = 100;
@@ -38,14 +39,14 @@ const double neuralDownSpeed = 60;
 const double neuralTolerance = 2;
 
 const double gravK = 15.0;
-const double angleOffset = 204.0;
+const double ANGLE_OFFSET = 190.0;
 
 double servoIncValue = 15;
 double servoIncPos = -25; 
 double servoInit = -25;
 double servoMax = 70;
-double servoStickInit = -80;
-double servoStickMax = 180;
+double servoStickInit = 0;
+double servoStickMax = 200;
 // ---------------- State Variables ----------------
 int armState = 1;
 double armTarget = armLow;
@@ -58,6 +59,8 @@ bool neuralAutoMove = false;
 bool autonomousMode = false;
 bool armInPosition = false;
 int macroStep = 0;
+
+int counter = 0;
 
 // ---------------- Actions ----------------
 void toggleMagAction() {
@@ -91,23 +94,39 @@ double clampPct(double v) {
 double getGravityAssistPct() {
   const double PI = 3.1415926535896;
   double angleDeg = ArmPot.value(deg);
-  double angleRad = (angleDeg - angleOffset) * PI / 180.0;
+  double angleRad = (angleDeg - ANGLE_OFFSET) * PI / 180.0;
   return gravK * fabs(cos(angleRad));
+  Controller1.Screen.clearScreen();
+  Controller1.Screen.setCursor(1, 1);
+  //Controller1.Screen.print("I am here");
 }
 
 void armUpManual() {
+  counter++;
+
   double grav = getGravityAssistPct();
-  double out = clampPct(armUpSpeed + grav);
-  ArmMotor.spin(forward, out, pct);
+  double out = clampPct(armUpSpeed + grav);  
+  if (out > 10) out = 10;
+  ArmMotor.spin(forward, armUpSpeed, pct);
   armAutoMove = false;
+
+  Controller1.Screen.clearScreen();
+  Controller1.Screen.setCursor(1, 1);
+  Controller1.Screen.print("%d", counter);
 }
 
 void armDownManual() {
+  counter++;
   double grav = getGravityAssistPct();
   double out = clampPct(armDownSpeed - grav);
   if (out < 10) out = 10;
-  ArmMotor.spin(reverse, out, pct);
+
+  ArmMotor.spin(reverse, armDownSpeed, pct);
   armAutoMove = false;
+
+  Controller1.Screen.clearScreen();
+  Controller1.Screen.setCursor(1, 1);
+  Controller1.Screen.print("%d", counter);
 }
 
 void cycleServoInc() {
@@ -118,14 +137,11 @@ void cycleServoInc() {
   ServoInc.setPosition(servoIncPos, degrees);
 }
 
-void toggleServoStickAction() {
-  static bool stickToggle;
-  stickToggle = !stickToggle;
-  if (stickToggle) {
-    servoStick.setPosition(servoStickMax, degrees);
-  } else {
-    servoStick.setPosition(servoStickInit, degrees);
-  }
+void toggleServoStickAction1() {
+    servoStick.setPosition(servoStickInit, rotationUnits::deg);
+}
+void toggleServoStickAction2() {
+    servoStick.setPosition(servoStickMax, rotationUnits::deg);
 }
 
 bool buttonYPressed()  { return Controller1.ButtonY.pressing(); }
@@ -154,6 +170,12 @@ struct Action {
 // ---------------- Threads ----------------
 int armAutoThread() {
   while (true) {
+    Controller1.Screen.clearScreen();
+    Controller1.Screen.setCursor(1, 1);
+    Controller1.Screen.print("%d", Controller1.ButtonR1.pressing());
+    Controller1.Screen.setCursor(2, 1);
+    Controller1.Screen.print("%d", Controller1.ButtonR2.pressing());
+
     if (armAutoMove) {
       double current = ArmPot.value(deg);
       double error = armTarget - current;
@@ -210,7 +232,7 @@ void macroSequenceUpdate() {
     armTarget = armHigh;
     armAutoMove = true;
     macroStep = 2; 
-    wait(300, msec);
+    wait(800, msec);
   } 
   else if (macroStep == 2) {
     if (armInPosition) {
@@ -219,13 +241,13 @@ void macroSequenceUpdate() {
       armTarget = armLow;
       armAutoMove = true;
       macroStep = 3;
-      wait(300, msec);
+      wait(800, msec);
     }
   } 
   else if (macroStep == 3) {
     if (armInPosition) {
-      servoIncPos -= servoIncValue;
-      if (servoIncPos < 0) servoIncPos = 180;
+      servoIncPos += servoIncValue;
+      if (servoIncPos > servoMax) servoIncPos = 180;
       ServoInc.setPosition(servoIncPos, degrees);
 
       autonomousMode = false;
@@ -247,8 +269,8 @@ int main() {
     {false, armUpManual, buttonR1Pressed},
     {false, cycleServoInc, buttonAPressed},
     {false, macroSequenceStart, buttonUpPressed},
-    {false, toggleServoStickAction, buttonL1Pressed}, // L1 toggles servoStick
-    {false, toggleServoStickAction, buttonL2Pressed}  // L2 also toggles servoStick
+    {false, toggleServoStickAction1, buttonL1Pressed}, // L1 toggles servoStick
+    {false, toggleServoStickAction2, buttonL2Pressed}  // L2 also toggles servoStick
   };
 
   ServoInc.setPosition(servoInit, degrees);
@@ -261,10 +283,9 @@ int main() {
     if (abs(rightSpeed) < driveDeadband) rightSpeed = 0;
     LeftMotor.spin(forward, leftSpeed, pct);
     RightMotor.spin(forward, rightSpeed, pct);
-
-
-    for (int i = 0; i < sizeof(actions)/sizeof(actions[0]); i++)
+    for (int i = 0; i < sizeof(actions)/sizeof(actions[0]); i++) {
       actions[i].update();
+    }
 
     if (autonomousMode) {
       macroSequenceUpdate();
