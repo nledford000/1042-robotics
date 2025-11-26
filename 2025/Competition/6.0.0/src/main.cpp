@@ -16,9 +16,7 @@
 // ---- END VEXCODE CONFIGURED DEVICES ----
 #include <cmath>
 using namespace vex;
-// NTS
-// fix arm hight 
-// ---------------- Constants ----------------
+
 const int driveDeadband = 15;
 
 const double armLow = 186;
@@ -47,7 +45,7 @@ double servoInit = -25;
 double servoMax = 50;
 double servoStickInit = 0;
 double servoStickMax = 200;
-// ---------------- State Variables ----------------
+
 int armState = 1;
 double armTarget = armLow;
 bool armAutoMove = false;
@@ -62,7 +60,6 @@ int macroStep = 0;
 
 int counter = 0;
 
-// ---------------- Actions ----------------
 void toggleMagAction() {
   magToggle = !magToggle;
   ServoOC.setPosition(magToggle ? magOpen : magClosed, degrees);
@@ -96,9 +93,6 @@ double getGravityAssistPct() {
   double angleDeg = ArmPot.value(deg);
   double angleRad = (angleDeg - ANGLE_OFFSET) * PI / 180.0;
   return gravK * fabs(cos(angleRad));
-  Controller1.Screen.clearScreen();
-  Controller1.Screen.setCursor(1, 1);
-  //Controller1.Screen.print("I am here");
 }
 
 void armUpManual() {
@@ -107,26 +101,19 @@ void armUpManual() {
   double grav = getGravityAssistPct();
   double out = clampPct(armUpSpeed + grav);  
   if (out > 10) out = 10;
-  ArmMotor.spin(forward, armUpSpeed, pct);
+  ArmMotor.spin(forward, out, pct);
+  //ArmMotor.spin(forward, armUpSpeed, pct);
   armAutoMove = false;
-
-  Controller1.Screen.clearScreen();
-  Controller1.Screen.setCursor(1, 1);
-  Controller1.Screen.print("%d", counter);
 }
 
 void armDownManual() {
-  counter++;
   double grav = getGravityAssistPct();
   double out = clampPct(armDownSpeed - grav);
   if (out < 10) out = 10;
 
-  ArmMotor.spin(reverse, armDownSpeed, pct);
+  ArmMotor.spin(reverse, out, pct);
+  //ArmMotor.spin(forward, armDownSpeed, pct);
   armAutoMove = false;
-
-  Controller1.Screen.clearScreen();
-  Controller1.Screen.setCursor(1, 1);
-  Controller1.Screen.print("%d", counter);
 }
 
 void cycleServoInc() {
@@ -154,7 +141,6 @@ bool buttonUpPressed() { return Controller1.ButtonUp.pressing(); }
 bool buttonL1Pressed() { return Controller1.ButtonL1.pressing(); }
 bool buttonL2Pressed() { return Controller1.ButtonL2.pressing(); }
 
-// ---------------- Action Struct ----------------
 struct Action {
   bool lastState;
   void (*onPress)();
@@ -167,7 +153,6 @@ struct Action {
   }
 };
 
-// ---------------- Threads ----------------
 int armAutoThread() {
   while (true) {
     Controller1.Screen.clearScreen();
@@ -199,6 +184,46 @@ int armAutoThread() {
   }
   return 0;
 }
+
+/*
+int armAutoThread() {
+  while (true) {
+    if (armAutoMove) {
+      double current = ArmPot.value(deg);
+      double error = armTarget - current;
+
+      if (fabs(error) > armTolerance) {
+        armInPosition = false;
+        bool needUp = (error > 0);
+
+        double grav = getGravityAssistPct();
+        double base = needUp ? armUpSpeed : armDownSpeed;
+        double out;
+
+        if (!needUp && armTarget == armLow) {
+          double distance = fabs(error);
+          double scale = distance / 40.0;
+          if (scale > 1.0) scale = 1.0;
+          out = clampPct(base * scale - grav);
+          if (out < 10) out = 10;
+        } else {
+          out = needUp ? clampPct(base + grav) : clampPct(base - grav);
+        }
+
+        if (needUp) ArmMotor.spin(forward, out, pct);
+        else ArmMotor.spin(reverse, out, pct);
+      } else {
+        ArmMotor.stop(hold);
+        armAutoMove = false;
+        armInPosition = true;
+      }
+    } else if (!Controller1.ButtonR1.pressing() && !Controller1.ButtonR2.pressing()) {
+      ArmMotor.stop(hold);
+    }
+  }
+  return 0;
+}
+*/
 
 int neuralAutoThread() {
   while (true) {
@@ -256,6 +281,50 @@ void macroSequenceUpdate() {
     wait(300, msec);
   }
 }
+
+
+/*
+int macroStep = 0;
+int macroTimer = 0;
+
+void macroSequenceStart() {
+  autonomousMode = true;
+  macroStep = 1;
+  macroTimer = Brain.timer(msec); // record start time
+}
+void macroSequenceUpdate() {
+  int now = Brain.timer(msec);
+
+  if (macroStep == 1) {
+    magToggle = true;
+    ServoOC.setPosition(magOpen, degrees);
+    armTarget = armHigh;
+    armAutoMove = true;
+    macroStep = 2;
+    macroTimer = now; // reset timer
+  } 
+  else if (macroStep == 2) {
+    if (armInPosition && now - macroTimer > 800) {
+      magToggle = false;
+      ServoOC.setPosition(magClosed, degrees);
+      armTarget = armLow;
+      armAutoMove = true;
+      macroStep = 3;
+      macroTimer = now;
+    }
+  } 
+  else if (macroStep == 3) {
+    if (armInPosition && now - macroTimer > 300) {
+      servoIncPos += servoIncValue;
+      if (servoIncPos > servoMax) servoIncPos = 180;
+      ServoInc.setPosition(servoIncPos, degrees);
+
+      autonomousMode = false;
+      macroStep = 0;
+    }
+  }
+}
+*/
 int main() {
   vexcodeInit();
   thread armThread(armAutoThread);
