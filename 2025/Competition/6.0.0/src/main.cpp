@@ -1,24 +1,8 @@
 #include "vex.h"
-
-// ---- START VEXCODE CONFIGURED DEVICES ----
-// Robot Configuration:
-// [Name]               [Type]        [Port(s)]
-// Controller1          controller                    
-// ArmMotor             motor         3               
-// NeuralMotor          motor         4               
-// LeftMotor            motor         1               
-// RightMotor           motor         2               
-// ServoOC              servo         A               
-// ArmPot               pot           B               
-// NeuralPot            pot           G               
-// ServoInc             servo         C               
-// servoStick           servo         H               
-// ---- END VEXCODE CONFIGURED DEVICES ----
 #include <cmath>
 using namespace vex;
 
 const int driveDeadband = 15;
-
 const double armLow = 186;
 const double armHigh = 230;
 const double armUpSpeed = 90;
@@ -26,7 +10,7 @@ const double armDownSpeed = 90;
 const double armTolerance = 1;
 
 const int magOpen = 0;
-const int magClosed = 100;
+const int magClosed = 28;
 
 const double neuralPos3 = 194;
 const double neuralPos2 = 221;
@@ -39,11 +23,11 @@ const double neuralTolerance = 2;
 const double gravK = 15.0;
 const double ANGLE_OFFSET = 190.0;
 
-double servoIncValue = 15;
-double servoIncPos = -25; 
-double servoInit = -25;
-double servoMax = 50;
-double servoStickInit = 0;
+const double TILE_SERVO_INCREMENT = 13;
+double tileServoPosition = -25;
+const double TILE_SERVO_INIT = -25;
+const double TILE_SERVO_MAX = 34;
+const double STICK_SERVO_INIT = 0;
 double servoStickMax = 200;
 
 int armState = 1;
@@ -53,12 +37,22 @@ bool magToggle = false;
 int neuralState = 1;
 double neuralTarget = neuralPos1;
 bool neuralAutoMove = false;
-
 bool autonomousMode = false;
 bool armInPosition = false;
 int macroStep = 0;
+bool armInLow;
+double clampPct(double v) {
+  if (v > 100.0) return 100.0;
+  if (v < -100.0) return -100.0;
+  return v;
+}
 
-int counter = 0;
+double getGravityAssistPct() {
+  const double PI = 3.1415926535896;
+  double angleDeg = ArmPot.value(deg);
+  double angleRad = (angleDeg - ANGLE_OFFSET) * PI / 180.0;
+  return gravK * fabs(cos(angleRad));
+}
 
 void toggleMagAction() {
   magToggle = !magToggle;
@@ -75,57 +69,56 @@ void cycleArmPosition() {
 
 void cycleNeuralPosition() {
   neuralState++;
-  if (neuralState > 3) neuralState = 1;
-  if (neuralState == 1) neuralTarget = neuralPos1;
-  else if (neuralState == 2) neuralTarget = neuralPos2;
-  else if (neuralState == 3) neuralTarget = neuralPos3;
+  if (neuralState > 3)
+    neuralState = 1;
+
+  if (neuralState == 1)
+    neuralTarget = neuralPos1;
+  else if (neuralState == 2)
+    neuralTarget = neuralPos2;
+  else if (neuralState == 3)
+    neuralTarget = neuralPos3;
+
   neuralAutoMove = true;
 }
 
-double clampPct(double v) {
-  if (v > 100.0) return 100.0;
-  if (v < -100.0) return -100.0;
-  return v;
-}
-
-double getGravityAssistPct() {
-  const double PI = 3.1415926535896;
-  double angleDeg = ArmPot.value(deg);
-  double angleRad = (angleDeg - ANGLE_OFFSET) * PI / 180.0;
-  return gravK * fabs(cos(angleRad));
-}
-
 void armUpManual() {
-  counter++;
-
   double grav = getGravityAssistPct();
   double out = clampPct(armUpSpeed + grav);  
-  if (out > 10) out = 10;
+  if (out < 10) out = 10;
   ArmMotor.spin(forward, out, pct);
-  //ArmMotor.spin(forward, armUpSpeed, pct);
   armAutoMove = false;
+  armInPosition = false;
 }
 
 void armDownManual() {
   double grav = getGravityAssistPct();
   double out = clampPct(armDownSpeed - grav);
-  if (out < 10) out = 10;
-
+  if (out < 10) out = 10;// xyz...
   ArmMotor.spin(reverse, out, pct);
-  //ArmMotor.spin(forward, armDownSpeed, pct);
   armAutoMove = false;
+  armInPosition = false;
 }
 
-void cycleServoInc() {
-  servoIncPos += servoIncValue;
-  if (servoIncPos > servoMax) {
-    servoIncPos = servoInit;
-  }
-  ServoInc.setPosition(servoIncPos, degrees);
+void incrementTileServoArm() {
+  tileServoPosition += TILE_SERVO_INCREMENT;
+    if (tileServoPosition > TILE_SERVO_MAX) {
+      tileServoPosition = TILE_SERVO_INIT;
+      Controller1.Screen.clearScreen();
+      Controller1.Screen.print("LAST");
+    } else if (tileServoPosition + TILE_SERVO_INCREMENT > TILE_SERVO_MAX){
+      tileServoPosition +=  8;
+      Controller1.Screen.clearScreen();
+      Controller1.Screen.print("ALMOST LAST");
+    }
+
+  ServoInc.setPosition(tileServoPosition, degrees);
+  // Controller1.Screen.clearScreen();
+  // Controller1.Screen.print("%d", tileServoPosition);
 }
 
 void toggleServoStickAction1() {
-    servoStick.setPosition(servoStickInit, rotationUnits::deg);
+    servoStick.setPosition(STICK_SERVO_INIT, rotationUnits::deg);
 }
 void toggleServoStickAction2() {
     servoStick.setPosition(servoStickMax, rotationUnits::deg);
@@ -155,12 +148,6 @@ struct Action {
 
 int armAutoThread() {
   while (true) {
-    Controller1.Screen.clearScreen();
-    Controller1.Screen.setCursor(1, 1);
-    Controller1.Screen.print("%d", Controller1.ButtonR1.pressing());
-    Controller1.Screen.setCursor(2, 1);
-    Controller1.Screen.print("%d", Controller1.ButtonR2.pressing());
-
     if (armAutoMove) {
       double current = ArmPot.value(deg);
       double error = armTarget - current;
@@ -185,46 +172,6 @@ int armAutoThread() {
   return 0;
 }
 
-/*
-int armAutoThread() {
-  while (true) {
-    if (armAutoMove) {
-      double current = ArmPot.value(deg);
-      double error = armTarget - current;
-
-      if (fabs(error) > armTolerance) {
-        armInPosition = false;
-        bool needUp = (error > 0);
-
-        double grav = getGravityAssistPct();
-        double base = needUp ? armUpSpeed : armDownSpeed;
-        double out;
-
-        if (!needUp && armTarget == armLow) {
-          double distance = fabs(error);
-          double scale = distance / 40.0;
-          if (scale > 1.0) scale = 1.0;
-          out = clampPct(base * scale - grav);
-          if (out < 10) out = 10;
-        } else {
-          out = needUp ? clampPct(base + grav) : clampPct(base - grav);
-        }
-
-        if (needUp) ArmMotor.spin(forward, out, pct);
-        else ArmMotor.spin(reverse, out, pct);
-      } else {
-        ArmMotor.stop(hold);
-        armAutoMove = false;
-        armInPosition = true;
-      }
-    } else if (!Controller1.ButtonR1.pressing() && !Controller1.ButtonR2.pressing()) {
-      ArmMotor.stop(hold);
-    }
-  }
-  return 0;
-}
-*/
-
 int neuralAutoThread() {
   while (true) {
     if (neuralAutoMove) {
@@ -244,108 +191,67 @@ int neuralAutoThread() {
   return 0;
 }
 
-// ---------------- Macro Sequence ----------------
 void macroSequenceStart() {
   autonomousMode = true;
   macroStep = 1;
+  armInPosition = false;
+}
+
+void incrementTileServoArmAuto() {
+  wait(2000, msec);
+  incrementTileServoArm();
 }
 
 void macroSequenceUpdate() {
   if (macroStep == 1) {
     magToggle = true;
-    ServoOC.setPosition(magOpen, degrees);
-    armTarget = armHigh;
-    armAutoMove = true;
-    macroStep = 2; 
-    wait(800, msec);
-  } 
-  else if (macroStep == 2) {
-    if (armInPosition) {
-      magToggle = false;
-      ServoOC.setPosition(magClosed, degrees);
-      armTarget = armLow;
-      armAutoMove = true;
-      macroStep = 3;
-      wait(800, msec);
-    }
-  } 
-  else if (macroStep == 3) {
-    if (armInPosition) {
-      servoIncPos += servoIncValue;
-      if (servoIncPos > servoMax) servoIncPos = 180;
-      ServoInc.setPosition(servoIncPos, degrees);
-
-      autonomousMode = false;
-      macroStep = 0;
-    }
-    wait(300, msec);
-  }
-}
-
-
-/*
-int macroStep = 0;
-int macroTimer = 0;
-
-void macroSequenceStart() {
-  autonomousMode = true;
-  macroStep = 1;
-  macroTimer = Brain.timer(msec); // record start time
-}
-void macroSequenceUpdate() {
-  int now = Brain.timer(msec);
-
-  if (macroStep == 1) {
-    magToggle = true;
-    ServoOC.setPosition(magOpen, degrees);
+    ServoOC.setPosition(magOpen, degrees);// here
     armTarget = armHigh;
     armAutoMove = true;
     macroStep = 2;
-    macroTimer = now; // reset timer
-  } 
+  }
   else if (macroStep == 2) {
-    if (armInPosition && now - macroTimer > 800) {
+    if (armInPosition) {
       magToggle = false;
-      ServoOC.setPosition(magClosed, degrees);
+      ServoOC.setPosition(magClosed, degrees);// here
+      wait(400, msec);
       armTarget = armLow;
       armAutoMove = true;
       macroStep = 3;
-      macroTimer = now;
-    }
-  } 
-  else if (macroStep == 3) {
-    if (armInPosition && now - macroTimer > 300) {
-      servoIncPos += servoIncValue;
-      if (servoIncPos > servoMax) servoIncPos = 180;
-      ServoInc.setPosition(servoIncPos, degrees);
-
-      autonomousMode = false;
-      macroStep = 0;
     }
   }
+  else if (macroStep == 3) {
+    autonomousMode = false;
+    macroStep = 0;
+    thread incrementTileArm(incrementTileServoArmAuto);
+  }
 }
-*/
+
 int main() {
   vexcodeInit();
   thread armThread(armAutoThread);
   thread neuralThread(neuralAutoThread);
-
+  //Controller1.Screen.setCursor(1, 1);
+  //Controller1.Screen.print("%d", magToggle);
   Action actions[] = {
     {false, toggleMagAction, buttonYPressed},
     {false, cycleNeuralPosition, buttonXPressed},
     {false, cycleArmPosition, buttonBPressed},
     {false, armDownManual, buttonR2Pressed},
     {false, armUpManual, buttonR1Pressed},
-    {false, cycleServoInc, buttonAPressed},
+    {false, incrementTileServoArm, buttonAPressed},
     {false, macroSequenceStart, buttonUpPressed},
-    {false, toggleServoStickAction1, buttonL1Pressed}, // L1 toggles servoStick
-    {false, toggleServoStickAction2, buttonL2Pressed}  // L2 also toggles servoStick
+    {false, toggleServoStickAction1, buttonL1Pressed},
+    {false, toggleServoStickAction2, buttonL2Pressed}
   };
 
-  ServoInc.setPosition(servoInit, degrees);
-  servoStick.setPosition(servoStickInit, degrees);
+  ServoInc.setPosition(TILE_SERVO_INIT, degrees);
+  servoStick.setPosition(STICK_SERVO_INIT, degrees);
 
   while (true) {
+  // Controller1.Screen.clearScreen();
+  // Controller1.Screen.print("%d", tileServoPosition);
+
     int leftSpeed = Controller1.Axis3.position();
     int rightSpeed = Controller1.Axis2.position();
     if (abs(leftSpeed) < driveDeadband) leftSpeed = 0;
@@ -355,7 +261,6 @@ int main() {
     for (int i = 0; i < sizeof(actions)/sizeof(actions[0]); i++) {
       actions[i].update();
     }
-
     if (autonomousMode) {
       macroSequenceUpdate();
     }
