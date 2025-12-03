@@ -2,45 +2,41 @@
 #include <cmath>
 using namespace vex;
 
-const int driveDeadband = 15;
-const double armLow = 186;
-const double armHigh = 230;
-const double armUpSpeed = 90;
-const double armDownSpeed = 90;
-const double armTolerance = 1;
-
-const int magOpen = 0;
-const int magClosed = 28;
-
-const double neuralPos3 = 194;
-const double neuralPos2 = 221;
-const double neuralPos1 = 250;
-
-const double neuralUpSpeed = 60;
-const double neuralDownSpeed = 60;
-const double neuralTolerance = 2;
-
-const double gravK = 15.0;
+const int DRIVE_DEADBAND = 15;
+const int MAG_OPEN = 0;
+const int MAG_CLOSED = 28;
+const double ARM_LOW = 195;
+const double ARM_HIGH = 249;
+const double ARM_UP_SPEED = 90;
+const double ARM_DOWN_SPEED = 90;
+const double ARM_TOLERANCE = 1;
+const double NEURAL_POS_3 = 50;
+const double NEURAL_POS_2 = 115;
+const double NEURAL_POS_1 = 215;
+const double NEURAL_UP_SPEED = 60;
+const double NEURAL_DOWN_SPEED = 60;
+const double NEURAL_TOLERANCE = 2;
+const double GRAV_K = 15.0;
 const double ANGLE_OFFSET = 190.0;
-
 const double TILE_SERVO_INCREMENT = 13;
-double tileServoPosition = -25;
 const double TILE_SERVO_INIT = -25;
 const double TILE_SERVO_MAX = 34;
-const double STICK_SERVO_INIT = 0;
-double servoStickMax = 200;
+const double STICK_SERVO_INIT = -15;
+const double STICK_SERVO_MAX = 150;
 
+double tileServoPosition = -25;
 int armState = 1;
-double armTarget = armLow;
+double armTarget = ARM_LOW;
 bool armAutoMove = false;
 bool magToggle = false;
 int neuralState = 1;
-double neuralTarget = neuralPos1;
+double neuralTarget = NEURAL_POS_1;
 bool neuralAutoMove = false;
 bool autonomousMode = false;
 bool armInPosition = false;
 int macroStep = 0;
 bool armInLow;
+
 double clampPct(double v) {
   if (v > 100.0) return 100.0;
   if (v < -100.0) return -100.0;
@@ -51,19 +47,19 @@ double getGravityAssistPct() {
   const double PI = 3.1415926535896;
   double angleDeg = ArmPot.value(deg);
   double angleRad = (angleDeg - ANGLE_OFFSET) * PI / 180.0;
-  return gravK * fabs(cos(angleRad));
+  return GRAV_K * fabs(cos(angleRad));
 }
 
 void toggleMagAction() {
   magToggle = !magToggle;
-  ServoOC.setPosition(magToggle ? magOpen : magClosed, degrees);
+  ServoOC.setPosition(magToggle ? MAG_OPEN : MAG_CLOSED, degrees);
 }
 
 void cycleArmPosition() {
   armState++;
   if (armState > 2) armState = 1;
-  if (armState == 1) armTarget = armLow;
-  else if (armState == 2) armTarget = armHigh;
+  if (armState == 1) armTarget = ARM_LOW;
+  else if (armState == 2) armTarget = ARM_HIGH;
   armAutoMove = true;
 }
 
@@ -73,18 +69,18 @@ void cycleNeuralPosition() {
     neuralState = 1;
 
   if (neuralState == 1)
-    neuralTarget = neuralPos1;
+    neuralTarget = NEURAL_POS_1;
   else if (neuralState == 2)
-    neuralTarget = neuralPos2;
+    neuralTarget = NEURAL_POS_2;
   else if (neuralState == 3)
-    neuralTarget = neuralPos3;
+    neuralTarget = NEURAL_POS_3;
 
   neuralAutoMove = true;
 }
 
 void armUpManual() {
   double grav = getGravityAssistPct();
-  double out = clampPct(armUpSpeed + grav);  
+  double out = clampPct(ARM_UP_SPEED + grav);  
   if (out < 10) out = 10;
   ArmMotor.spin(forward, out, pct);
   armAutoMove = false;
@@ -93,7 +89,7 @@ void armUpManual() {
 
 void armDownManual() {
   double grav = getGravityAssistPct();
-  double out = clampPct(armDownSpeed - grav);
+  double out = clampPct(ARM_DOWN_SPEED - grav);
   if (out < 10) out = 10;// xyz...
   ArmMotor.spin(reverse, out, pct);
   armAutoMove = false;
@@ -120,8 +116,9 @@ void incrementTileServoArm() {
 void toggleServoStickAction1() {
     servoStick.setPosition(STICK_SERVO_INIT, rotationUnits::deg);
 }
+
 void toggleServoStickAction2() {
-    servoStick.setPosition(servoStickMax, rotationUnits::deg);
+    servoStick.setPosition(STICK_SERVO_MAX, rotationUnits::deg);
 }
 
 bool buttonYPressed()  { return Controller1.ButtonY.pressing(); }
@@ -149,13 +146,14 @@ struct Action {
 int armAutoThread() {
   while (true) {
     if (armAutoMove) {
+      toggleServoStickAction1();
       double current = ArmPot.value(deg);
-      double error = armTarget - current;
-      if (fabs(error) > armTolerance) {
+      double armPosition = armTarget - current;
+      if (fabs(armPosition) > ARM_TOLERANCE) {
         armInPosition = false;
-        bool needUp = (error > 0);
+        bool needUp = (armPosition > 0);
         double grav = getGravityAssistPct();
-        double base = needUp ? armUpSpeed : armDownSpeed;
+        double base = needUp ? ARM_UP_SPEED : ARM_DOWN_SPEED;
         double out = needUp ? clampPct(base + grav) : clampPct(base - grav);
         if (!needUp && out < 10) out = 10;
         if (needUp) ArmMotor.spin(forward, out, pct);
@@ -176,10 +174,10 @@ int neuralAutoThread() {
   while (true) {
     if (neuralAutoMove) {
       double current = NeuralPot.value(deg);
-      double error = neuralTarget - current;
-      if (fabs(error) > neuralTolerance) {
-        NeuralMotor.spin(error > 0 ? reverse : forward,
-                         (error > 0 ? neuralDownSpeed : neuralUpSpeed), pct);
+      double neuralPosition = neuralTarget - current;
+      if (fabs(neuralPosition) > NEURAL_TOLERANCE) {
+        NeuralMotor.spin(neuralPosition > 0 ? reverse : forward,
+                         (neuralPosition > 0 ? NEURAL_DOWN_SPEED : NEURAL_UP_SPEED), pct);
       } else {
         NeuralMotor.stop(hold);
         neuralAutoMove = false;
@@ -205,17 +203,17 @@ void incrementTileServoArmAuto() {
 void macroSequenceUpdate() {
   if (macroStep == 1) {
     magToggle = true;
-    ServoOC.setPosition(magOpen, degrees);// here
-    armTarget = armHigh;
+    ServoOC.setPosition(MAG_OPEN, degrees);// here
+    armTarget = ARM_HIGH;
     armAutoMove = true;
     macroStep = 2;
   }
   else if (macroStep == 2) {
     if (armInPosition) {
       magToggle = false;
-      ServoOC.setPosition(magClosed, degrees);// here
+      ServoOC.setPosition(MAG_CLOSED, degrees);// here
       wait(400, msec);
-      armTarget = armLow;
+      armTarget = ARM_LOW;
       armAutoMove = true;
       macroStep = 3;
     }
@@ -231,8 +229,6 @@ int main() {
   vexcodeInit();
   thread armThread(armAutoThread);
   thread neuralThread(neuralAutoThread);
-  //Controller1.Screen.setCursor(1, 1);
-  //Controller1.Screen.print("%d", magToggle);
   Action actions[] = {
     {false, toggleMagAction, buttonYPressed},
     {false, cycleNeuralPosition, buttonXPressed},
@@ -249,13 +245,19 @@ int main() {
   servoStick.setPosition(STICK_SERVO_INIT, degrees);
 
   while (true) {
-  // Controller1.Screen.clearScreen();
-  // Controller1.Screen.print("%d", tileServoPosition);
+    double armPotValue = ArmPot.value(degrees);
+    double neuralPotValue = NeuralPot.value(deg);
+    Controller1.Screen.clearScreen();
+    Controller1.Screen.setCursor(1, 1);
+    Controller1.Screen.print("%d", (int)armPotValue);
+    Controller1.Screen.setCursor(2, 1);
+    Controller1.Screen.print("%d", (int)neuralPotValue);
+
 
     int leftSpeed = Controller1.Axis3.position();
     int rightSpeed = Controller1.Axis2.position();
-    if (abs(leftSpeed) < driveDeadband) leftSpeed = 0;
-    if (abs(rightSpeed) < driveDeadband) rightSpeed = 0;
+    if (abs(leftSpeed) < DRIVE_DEADBAND) leftSpeed = 0;
+    if (abs(rightSpeed) < DRIVE_DEADBAND) rightSpeed = 0;
     LeftMotor.spin(forward, leftSpeed, pct);
     RightMotor.spin(forward, rightSpeed, pct);
     for (int i = 0; i < sizeof(actions)/sizeof(actions[0]); i++) {
