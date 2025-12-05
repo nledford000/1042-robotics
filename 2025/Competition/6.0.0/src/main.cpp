@@ -5,14 +5,14 @@ using namespace vex;
 const int DRIVE_DEADBAND = 15;
 const int MAG_OPEN = 0;
 const int MAG_CLOSED = 28;
-const double ARM_LOW = 195;
-const double ARM_HIGH = 249;
+const double ARM_LOW = 195;//186>>195
+const double ARM_HIGH = 249;//230>>249
 const double ARM_UP_SPEED = 90;
 const double ARM_DOWN_SPEED = 90;
 const double ARM_TOLERANCE = 1;
-const double NEURAL_POS_3 = 50;
-const double NEURAL_POS_2 = 115;
-const double NEURAL_POS_1 = 215;
+const double NEURAL_POS_3 = 50;// 194>>50
+const double NEURAL_POS_2 = 115;// 221>>115
+const double NEURAL_POS_1 = 215;// 250>>215
 const double NEURAL_UP_SPEED = 60;
 const double NEURAL_DOWN_SPEED = 60;
 const double NEURAL_TOLERANCE = 2;
@@ -90,7 +90,7 @@ void armUpManual() {
 void armDownManual() {
   double grav = getGravityAssistPct();
   double out = clampPct(ARM_DOWN_SPEED - grav);
-  if (out < 10) out = 10;// xyz...
+  if (out < 10) out = 10;
   ArmMotor.spin(reverse, out, pct);
   armAutoMove = false;
   armInPosition = false;
@@ -101,16 +101,12 @@ void incrementTileServoArm() {
     if (tileServoPosition > TILE_SERVO_MAX) {
       tileServoPosition = TILE_SERVO_INIT;
       Controller1.Screen.clearScreen();
-      Controller1.Screen.print("LAST");
     } else if (tileServoPosition + TILE_SERVO_INCREMENT > TILE_SERVO_MAX){
       tileServoPosition +=  8;
       Controller1.Screen.clearScreen();
-      Controller1.Screen.print("ALMOST LAST");
     }
 
   ServoInc.setPosition(tileServoPosition, degrees);
-  // Controller1.Screen.clearScreen();
-  // Controller1.Screen.print("%d", tileServoPosition);
 }
 
 void toggleServoStickAction1() {
@@ -203,7 +199,7 @@ void incrementTileServoArmAuto() {
 void macroSequenceUpdate() {
   if (macroStep == 1) {
     magToggle = true;
-    ServoOC.setPosition(MAG_OPEN, degrees);// here
+    ServoOC.setPosition(MAG_OPEN, degrees);
     armTarget = ARM_HIGH;
     armAutoMove = true;
     macroStep = 2;
@@ -211,7 +207,7 @@ void macroSequenceUpdate() {
   else if (macroStep == 2) {
     if (armInPosition) {
       magToggle = false;
-      ServoOC.setPosition(MAG_CLOSED, degrees);// here
+      ServoOC.setPosition(MAG_CLOSED, degrees);
       wait(400, msec);
       armTarget = ARM_LOW;
       armAutoMove = true;
@@ -245,15 +241,7 @@ int main() {
   servoStick.setPosition(STICK_SERVO_INIT, degrees);
 
   while (true) {
-    double armPotValue = ArmPot.value(degrees);
-    double neuralPotValue = NeuralPot.value(deg);
-    Controller1.Screen.clearScreen();
-    Controller1.Screen.setCursor(1, 1);
-    Controller1.Screen.print("%d", (int)armPotValue);
-    Controller1.Screen.setCursor(2, 1);
-    Controller1.Screen.print("%d", (int)neuralPotValue);
-
-
+    
     int leftSpeed = Controller1.Axis3.position();
     int rightSpeed = Controller1.Axis2.position();
     if (abs(leftSpeed) < DRIVE_DEADBAND) leftSpeed = 0;
